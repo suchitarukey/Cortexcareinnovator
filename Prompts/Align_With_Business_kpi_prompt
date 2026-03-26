@@ -1,0 +1,162 @@
+You are a Snowflake + Streamlit + Healthcare Analytics expert.
+
+We already have a working Streamlit app with:
+- Tabs
+- KPI cards
+- Charts
+- Summary tables
+
+DO NOT redesign UI.
+DO NOT change layout significantly.
+
+ONLY:
+✔ Correct KPI formulas
+✔ Align KPI names to business language
+✔ Reorder tabs
+✔ Suggest minimal data transformations if required
+
+----------------------------------------
+🎯 TASK 1: REORDER TABS
+----------------------------------------
+
+Change tab order to:
+
+1. HCC Recapture
+2. ER Utilization
+3. Preventive Screening
+
+----------------------------------------
+🎯 TASK 2: HCC RECAPTURE KPI CORRECTIONS
+----------------------------------------
+
+Update KPI calculations:
+
+1. HCC Recapture Rate =
+   Recaptured HCCs / Total Prior-Year HCCs
+
+2. HCC Drop-Off Rate (Leakage) =
+   Missed HCCs / Total Prior-Year HCCs
+
+3. Recapture Opportunity Rate =
+   Members with gaps / Total eligible members
+
+4. Provider Recapture Performance =
+   Recaptured HCCs grouped by PROVIDER_ID
+
+5. Revenue Leakage (Missed Recapture) =
+   Missed HCCs * RAF factor
+   (Assume 5.2M revenue tied to RAF = 1 → scale proportionally)
+
+Rename KPIs exactly as above.
+
+----------------------------------------
+🎯 TASK 3: ER UTILIZATION KPI CORRECTIONS
+----------------------------------------
+
+Define KPIs:
+
+1. Non-Urgent ED Visit Rate =
+   Non-Urgent Visits / Total ED Visits
+
+2. Avoidable ED Cost =
+   SUM(cost WHERE visit_type = 'Non-Urgent')
+
+3. ED Utilization Rate =
+   Total ED Visits / Total Members
+
+4. Frequent ED Utilizer Rate =
+   Members with >3 ED visits / Total Members
+
+Ensure:
+- Proper filtering using CLAIMS table
+- Use visit classification if available
+
+----------------------------------------
+🎯 TASK 4: PREVENTIVE SCREENING KPI CORRECTIONS
+----------------------------------------
+
+Define KPIs:
+
+1. Screening Compliance Rate =
+   Members with completed screening / Eligible members
+
+2. Care Gap Rate =
+   Members with GAP_FLAG = 1 / Total members
+
+3. Provider Screening Performance =
+   Compliance grouped by PROVIDER_ID
+
+4. Missed Opportunity Rate =
+   Members eligible but not screened / Eligible members
+
+----------------------------------------
+🎯 TASK 5: ADD BUSINESS OUTCOME TEXT (NO UI CHANGE)
+----------------------------------------
+
+Below KPI section in each tab, add:
+
+HCC Recapture:
+"Outcome: Improved RAF scores & higher value-based reimbursement"
+
+ER Utilization:
+"Outcome: Reduced unnecessary utilization & medical cost savings"
+
+Preventive Screening:
+"Outcome: Higher quality scores (HEDIS, Star Ratings) & incentive gains"
+
+Use:
+st.info() or st.markdown()
+
+----------------------------------------
+🎯 TASK 6: DATA ADJUSTMENTS (IF NEEDED)
+----------------------------------------
+
+If required, create or adjust summary logic:
+
+From tables:
+- CLAIMS
+- MEMBER
+- PROCEDURE
+- PROVIDER
+- DIAGNOSIS
+
+Ensure:
+
+✔ Proper joins on PATIENT_ID / MEMBER_ID
+✔ Use DISTINCT where required
+✔ Avoid double counting claims
+✔ Handle NULLs safely
+
+----------------------------------------
+🎯 TASK 7: KEEP EXISTING UI
+----------------------------------------
+
+Do NOT:
+- Change colors
+- Change layout
+- Change chart types
+
+ONLY update:
+✔ KPI formulas
+✔ KPI labels
+✔ Tab order
+✔ Add outcome text
+
+----------------------------------------
+🎯 OUTPUT
+----------------------------------------
+
+Provide:
+
+1. Updated KPI calculation snippets
+2. Minimal SQL changes if required
+3. Updated tab definition code
+4. Any assumptions clearly mentioned
+
+Ensure:
+✔ No breaking changes
+✔ Clean integration
+✔ Business-aligned KPIs
+✔ Ready for demo explanation
+
+
