@@ -1,1 +1,154 @@
 
+Prompt to create tables and load synthetic data : 
+
+You are a Snowflake data engineer and healthcare analytics expert.
+
+Context:
+We are building a lightweight MVP for a Value-Based Care analytics platform using Snowflake. 
+The goal is to simulate a healthcare dataset that can support analytics use cases such as:
+
+1. Risk Adjustment Coding Gap Detection
+2. Care Gap Detection (HEDIS measures like Diabetes A1C)
+3. Avoidable ER Utilization
+
+We are in Day 1 of the implementation and instead of ingesting real data, we want to create structured tables and populate them with realistic synthetic sample data.
+
+The sample data should resemble a typical US healthcare claims dataset and should be consistent across tables (foreign keys should match properly).
+
+we want you to generate similar tables and data in Snowflake.
+
+---
+
+Task:
+
+1. Create the following tables in Snowflake:
+
+- members
+- claims
+- diagnoses
+- procedures
+
+2. Define appropriate schemas for each table with realistic healthcare fields.
+
+3. Generate and insert sample data (at least 5000 rows per table) with consistent relationships.
+
+---
+
+Table Requirements:
+
+### members table
+Purpose: Store patient/member demographic and enrollment information
+
+Columns:
+- member_id (primary key)
+- first_name
+- last_name
+- gender
+- date_of_birth
+- age
+- city
+- state
+- enrollment_start_date
+- enrollment_end_date
+- payer_type (Medicare Advantage / Commercial)
+
+---
+
+### claims table
+Purpose: Store healthcare utilization and cost data
+
+Columns:
+- claim_id (primary key)
+- member_id (foreign key)
+- claim_date
+- claim_type (Inpatient / Outpatient / ER)
+- provider_id
+- total_cost
+- diagnosis_code
+- procedure_code
+
+---
+
+### diagnoses table
+Purpose: Store diagnosis history for members
+
+Columns:
+- diagnosis_id (primary key)
+- member_id (foreign key)
+- diagnosis_code (ICD-10 style, e.g., E11 for Diabetes, J44 for COPD)
+- diagnosis_description
+- diagnosis_date
+- chronic_flag (Yes/No)
+
+Ensure common chronic conditions are included:
+- Diabetes
+- COPD
+- CHF
+- Hypertension
+
+---
+
+### procedures table
+Purpose: Store procedures and screenings
+
+Columns:
+- procedure_id (primary key)
+- member_id (foreign key)
+- procedure_code (CPT style)
+- procedure_description
+- procedure_date
+
+Include preventive procedures like:
+- A1C test
+- Mammogram
+- Colonoscopy
+
+### Provider table
+Purpose: Store provider-level information 
+Columns:
+provider_id (primary key)
+
+
+provider_name
+
+
+provider_type (e.g., PCP, Specialist)
+
+
+
+
+---
+
+Data Generation Rules:
+
+- Ensure referential integrity (member_id matches across all tables)
+- Each member should have multiple claims and diagnoses
+- Some members should intentionally:
+    - Have diabetes but no A1C test (to simulate care gaps)
+    - Have ER visits for non-emergency conditions
+    - Have diagnoses last year but missing this year (for coding gaps)
+- Distribute ages to include elderly population (65+) for Medicare relevance
+- Generate realistic costs:
+    - ER visits: 500–2000 USD
+    - Inpatient: 5000–20000 USD
+- Dates should span across 2 years (2024–2025)
+
+---
+
+Output Requirements:
+
+1. Provide Snowflake SQL DDL statements (CREATE TABLE)
+2. Provide INSERT statements with sample data
+3. Ensure data is clean, structured, and queryable
+4. Keep SQL compatible with Snowflake syntax
+
+---
+
+Goal:
+
+The generated dataset should be immediately usable for downstream analytics in Snowflake dashboards and AI queries using Cortex.
+
+Focus on realism, consistency, and alignment with value-based care analytics use cases.
+
+
+
