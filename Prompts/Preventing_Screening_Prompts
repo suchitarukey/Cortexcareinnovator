@@ -1,0 +1,151 @@
+Create a complete, production-ready Streamlit dashboard using Snowflake Cortex.
+
+Use table: HCC_DASHBOARD_SUMMARY
+
+Build a healthcare dashboard focused on "Preventive Screening & Care Gap Closure".
+
+-------------------------------------
+1. DASHBOARD NAME
+-------------------------------------
+Name: "CareGapIQ – Preventive Screening Intelligence"
+
+-------------------------------------
+2. EXECUTIVE SUMMARY (TOP SECTION)
+-------------------------------------
+Generate a short summary highlighting:
+- Preventive screening compliance rate
+- Number of overdue members
+- Missed opportunities during patient visits
+- Provider-level performance variation
+
+Keep it concise and business-friendly.
+
+-------------------------------------
+3. KPI CARDS (TOP METRICS)
+-------------------------------------
+
+Create 4 KPI cards:
+
+1. Preventive Screening Compliance Rate
+Formula:
+Completed Screenings / Total Eligible Members
+
+2. Care Gap Rate (Screening Gap Rate)
+Formula:
+Members overdue for screening / Total eligible members
+
+3. Provider Screening Performance
+Formula:
+Screenings completed by provider / Eligible members
+
+4. Missed Opportunity Rate
+Formula:
+Eligible visits with no screening action / Total eligible visits
+
+Display values as percentages where applicable.
+
+-------------------------------------
+4. SIDEBAR FILTERS
+-------------------------------------
+Add filters:
+- Provider ID
+- Screening Type (use HCC_CODE as proxy if needed)
+- Patient ID
+
+-------------------------------------
+5. CHARTS (INSIGHT-DRIVEN)
+-------------------------------------
+
+Create the following visualizations:
+
+1. Provider Screening Compliance
+- Bar chart showing compliance rate by provider
+
+2. Care Gap Distribution
+- Count of members with gaps vs completed
+
+3. Missed Opportunities by Provider
+- Bar chart showing missed opportunity rate
+
+4. Screening Performance Trend (if date available)
+- Optional trend over time
+
+Add 1-line insight captions below each chart.
+
+-------------------------------------
+6. PATIENT-LEVEL TABLE (ACTIONABLE)
+-------------------------------------
+
+Show table of:
+- PATIENT_ID
+- PROVIDER_ID
+- HCC_CODE (screening type proxy)
+- GAP_FLAG
+- REVENUE_IMPACT (optional as cost impact)
+
+Filter:
+Show only patients with GAP_FLAG = 1
+
+Sort by:
+Highest impact or priority first
+
+Add heading:
+"Patients Requiring Immediate Screening Action"
+
+-------------------------------------
+7. AI INSIGHTS (CORTEX)
+-------------------------------------
+
+Generate insights using Cortex:
+
+- Top 3 providers with lowest compliance
+- Total overdue members
+- Key pattern in missed screenings
+- One-line recommendation
+
+Keep output concise and executive-friendly.
+
+-------------------------------------
+8. RECOMMENDED ACTIONS
+-------------------------------------
+
+Group into:
+
+High Priority:
+- Target overdue members
+- Focus on low-performing providers
+
+Medium Priority:
+- Improve screening workflows
+- Increase patient outreach
+
+Strategic:
+- Implement automated alerts
+- Integrate screening reminders
+
+-------------------------------------
+9. UI DESIGN
+-------------------------------------
+
+- Use clean layout with sections
+- Add icons:
+  📊 KPIs
+  📈 Charts
+  📋 Table
+  🤖 AI Insights
+  🚑 Actions
+- Use dividers for separation
+- Keep layout executive-friendly
+
+-------------------------------------
+10. OUTPUT
+-------------------------------------
+
+Generate full working Streamlit code using Snowflake Snowpark session.
+
+Ensure:
+- Code is optimized
+- Clean UI
+- Ready to deploy
+
+
