@@ -1,0 +1,187 @@
+You are a Snowflake Cortex + Streamlit + UI/UX expert.
+
+We have an existing Streamlit healthcare app with:
+- Tabs (HCC, ER, Preventive)
+- KPIs
+- Charts
+- Filters
+
+----------------------------------------
+🎯 OBJECTIVE
+----------------------------------------
+
+Add a COMPLETE AI Insights Panel that is:
+
+✔ Structured (not raw text)
+✔ Business-focused
+✔ Actionable
+✔ Fast and safe
+✔ Production-ready
+
+DO NOT change existing UI or logic.
+
+----------------------------------------
+🧠 TASK 1: CREATE REUSABLE CORTEX FUNCTION
+----------------------------------------
+
+Create a function:
+
+def generate_insights(prompt):
+    query = f"""
+    SELECT SNOWFLAKE.CORTEX.COMPLETE(
+        'mistral-large',
+        $$ {prompt} $$
+    ) AS RESPONSE;
+    """
+    return session.sql(query).collect()[0]["RESPONSE"]
+
+----------------------------------------
+🧠 TASK 2: STRUCTURED PROMPTS (VERY IMPORTANT)
+----------------------------------------
+
+Ensure Cortex returns structured output:
+
+Format:
+
+INSIGHTS:
+- ...
+
+RISKS:
+- ...
+
+RECOMMENDATIONS:
+- ...
+
+----------------------------------------
+📊 HCC PROMPT
+----------------------------------------
+
+"Analyze HCC recapture performance:
+
+Recapture Rate: {recapture_rate}
+Drop-Off Rate: {drop_off}
+Opportunity Rate: {opportunity}
+Revenue Leakage: {revenue}
+
+Return:
+
+INSIGHTS (3 points)
+RISKS (2 points)
+RECOMMENDATIONS (2 actions)"
+
+----------------------------------------
+🚑 ER PROMPT
+----------------------------------------
+
+"Analyze ER utilization:
+
+Non-Urgent Rate: {non_urgent}
+Avoidable Cost: {cost}
+Utilization Rate: {utilization}
+Frequent Utilizers: {frequent}
+
+Return structured output:
+INSIGHTS, RISKS, RECOMMENDATIONS"
+
+----------------------------------------
+🩺 SCREENING PROMPT
+----------------------------------------
+
+"Analyze preventive screening:
+
+Compliance Rate: {compliance}
+Care Gap Rate: {gap}
+Missed Opportunity: {missed}
+
+Return structured output:
+INSIGHTS, RISKS, RECOMMENDATIONS"
+
+----------------------------------------
+🛠 TASK 3: STREAMLIT UI (PRO VERSION)
+----------------------------------------
+
+Add section:
+
+st.markdown("### 🤖 AI Insights")
+
+Add button:
+
+if st.button("Generate AI Insights"):
+
+    with st.spinner("Analyzing data..."):
+        response = generate_insights(prompt)
+
+----------------------------------------
+🧠 TASK 4: PARSE RESPONSE (IMPORTANT)
+----------------------------------------
+
+Split response into:
+
+- Insights
+- Risks
+- Recommendations
+
+----------------------------------------
+🎨 TASK 5: DISPLAY (PRO UI)
+----------------------------------------
+
+Display like:
+
+st.success("✅ Insights:\\n" + insights)
+
+st.warning("⚠ Risks:\\n" + risks)
+
+st.info("💡 Recommendations:\\n" + recommendations)
+
+----------------------------------------
+⚡ TASK 6: PERFORMANCE OPTIMIZATION
+----------------------------------------
+
+Use caching:
+
+@st.cache_data
+
+Avoid multiple Cortex calls
+
+----------------------------------------
+🛡 TASK 7: SAFE FALLBACK (VERY IMPORTANT)
+----------------------------------------
+
+If Cortex fails:
+
+Return default insights:
+
+"Top providers contribute most revenue leakage..."
+
+----------------------------------------
+🎯 TASK 8: OPTIONAL ADVANCED FEATURES
+----------------------------------------
+
+Add:
+
+✔ "Refresh Insights" button  
+✔ Timestamp of last generation  
+✔ Prevent multiple clicks  
+
+----------------------------------------
+🎯 OUTPUT
+----------------------------------------
+
+Provide:
+
+1. generate_insights() function
+2. Streamlit UI code
+3. Example prompt usage
+4. Parsing logic
+5. Fallback handling
+
+----------------------------------------
+✔ SUCCESS CRITERIA
+----------------------------------------
+
+✔ Clean structured output  
+✔ Business insights (not generic AI text)  
+✔ Smooth UI experience  
+✔ No app break  
+✔ Hackathon-winning feature  
+dont change existing working structure , give me full python code
