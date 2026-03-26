@@ -1,0 +1,269 @@
+Prompt1: 
+Create a Streamlit dashboard using Snowflake Cortex for HCC Recapture Analytics.
+
+Use table HCC_DASHBOARD_SUMMARY.
+
+Include:
+
+1. KPI cards:
+   - Recapture Rate
+   - Drop-Off Rate
+   - Opportunity Rate
+   - Total Revenue Leakage
+   - Total Members with Gaps
+
+2. Charts:
+   - Bar chart: Provider Performance (recapture rate)
+   - Bar chart: Revenue Leakage by Provider
+
+3. Table:
+   - Patient-level gaps
+
+4. Filters:
+   - provider_id
+   - condition (hcc_code)
+
+5. Add AI-generated insights using Cortex:
+   - summarize key findings
+   - highlight high-risk patients
+   - identify providers needing attention
+
+6. Add "Recommended Actions" section
+
+Generate complete Streamlit code using Snowflake session.
+
+Prompt2: 
+Create a complete, production-ready Streamlit dashboard using Snowflake Cortex for HCC Recapture Analytics.
+
+Use table: HCC_DASHBOARD_SUMMARY
+
+Design the app with a clean, modern UI and healthcare theme.
+
+Include the following sections:
+
+1. HEADER & BRANDING:
+- App name: "RecaptureIQ"
+- Subtitle: "AI-Powered HCC Recapture Intelligence"
+- Use icons and styled markdown for a professional look
+
+2. KPI CARDS (top row, 5 columns):
+- Recapture Rate = SUM(recapture_flag) / COUNT(patient_id)
+- Drop-Off Rate = SUM(gap_flag) / COUNT(patient_id)
+- Opportunity Rate = SUM(gap_flag) / COUNT(patient_id)
+- Total Revenue Leakage = SUM(revenue_impact)
+- Members with Gaps = SUM(gap_flag)
+- Display using st.metric with clean formatting and percentages
+
+3. FILTER PANEL (sidebar):
+- Filters for provider_id and hcc_code
+- Allow multi-select filtering
+
+4. CHARTS (side-by-side layout):
+- Bar chart: Provider Recapture Performance (recapture rate by provider)
+- Bar chart: Revenue Leakage by Provider (sum of revenue_impact)
+- Add captions explaining insights
+
+5. PATIENT TABLE:
+- Show patient_id, provider_id, hcc_code, gap_flag, revenue_impact
+- Make it interactive and filtered
+
+6. AI INSIGHTS SECTION:
+- Use Snowflake Cortex to generate insights from the data
+- Include:
+  - Key findings
+  - High-risk patterns
+  - Top providers driving revenue leakage
+
+7. RECOMMENDED ACTIONS SECTION:
+- Add actionable bullet points:
+  - Prioritize high-risk patients
+  - Improve provider coding
+  - Reduce revenue leakage
+  - Target missed HCCs
+
+8. UI IMPROVEMENTS:
+- Use icons (📊, 📋, 🤖, 🚑)
+- Add section dividers using st.markdown("---")
+- Ensure spacing and readability
+- Use columns for layout
+
+Generate complete working Streamlit code using Snowflake session (snowflake.snowpark).
+Ensure queries are optimized and code is clean and ready to run.
+
+Final prompt:
+Create a complete, production-ready Streamlit dashboard using Snowflake Cortex for HCC Recapture Analytics.
+
+Use table: HCC_DASHBOARD_SUMMARY
+
+Design a clean, modern healthcare dashboard named "RecaptureIQ".
+
+Include the following:
+
+1. EXECUTIVE SUMMARY (top section)
+- Highlight:
+  - High drop-off rate
+  - Revenue leakage
+  - Provider performance issues
+- Keep it short and impactful
+
+2. KPI CARDS (5 columns)
+- Recapture Rate = SUM(recapture_flag) / COUNT(patient_id)
+- Drop-Off Rate = SUM(gap_flag) / COUNT(patient_id)
+- Opportunity Rate = SUM(gap_flag) / COUNT(patient_id)
+- Revenue Leakage = SUM(revenue_impact)
+- Members with Gaps = SUM(gap_flag)
+
+3. FILTERS (sidebar)
+- provider_id
+- hcc_code
+
+4. CHARTS
+- Provider Recapture Performance (recapture rate by provider)
+- Revenue Leakage by Provider (sum of revenue_impact)
+- Add insight captions
+
+5. PATIENT TABLE
+- Show high-risk patients sorted by revenue_impact descending
+
+6. AI INSIGHTS (using Cortex)
+Generate:
+- Top providers causing leakage
+- High-risk patient count
+- Key patterns
+- Business recommendation
+
+7. RECOMMENDED ACTIONS
+Group into:
+- High Priority
+- Medium Priority
+- Strategic
+
+8. UI DESIGN
+- Use icons (📊 🤖 🚑 📋)
+- Add dividers
+- Use columns for layout
+- Clean spacing and readable layout
+
+Generate full working Streamlit code using Snowflake Snowpark session.
+Ensure code is optimized and ready to run.
+
+Correction in KPI’s 
+You are a Snowflake Cortex AI + Streamlit + SQL expert.
+
+Your task is to CORRECT and STANDARDIZE the HCC Recapture KPI calculations, update the backend summary table, and reflect accurate KPIs in the Streamlit dashboard.
+
+----------------------------------------
+🎯 OBJECTIVE
+----------------------------------------
+Fix incorrect KPI calculations in the HCC Recapture tab and align them with the following business definitions.
+
+----------------------------------------
+📊 CORRECT KPI DEFINITIONS
+----------------------------------------
+
+1. HCC Recapture Rate
+= Recaptured HCCs / Total Prior-Year HCCs
+
+2. HCC Drop-Off Rate (Leakage)
+= Missed HCCs / Total Prior-Year HCCs
+
+3. Recapture Opportunity Rate
+= Members with HCC gaps / Total Eligible Members
+
+4. Revenue Leakage from Missed Recapture
+= (Missed HCCs / Total Prior-Year HCCs) * 5,200,000
+(Assumption: $5.2M tied to RAF score of 1)
+
+----------------------------------------
+📂 AVAILABLE TABLES
+----------------------------------------
+claims
+member
+diagnosis
+provider
+
+----------------------------------------
+🧱 TASK 1: BUILD / UPDATE SUMMARY TABLE
+----------------------------------------
+
+Create or replace a summary table:
+HCC_RECAPTURE_SUMMARY
+
+Logic:
+
+- Identify PRIOR YEAR HCCs using diagnosis table
+- Identify CURRENT YEAR recaptured HCCs (same member + same HCC condition)
+- Missed HCCs = Prior year HCCs NOT present in current year
+- Members with gaps = members having at least 1 missed HCC
+- Total eligible members = all members with prior-year HCCs
+
+Include columns:
+- total_prior_hccs
+- recaptured_hccs
+- missed_hccs
+- total_members
+- members_with_gaps
+
+----------------------------------------
+🧮 TASK 2: KPI CALCULATION SQL
+----------------------------------------
+
+Create KPI metrics:
+
+SELECT
+    recaptured_hccs / NULLIF(total_prior_hccs,0) AS hcc_recapture_rate,
+    missed_hccs / NULLIF(total_prior_hccs,0) AS hcc_dropoff_rate,
+    members_with_gaps / NULLIF(total_members,0) AS recapture_opportunity_rate,
+    (missed_hccs / NULLIF(total_prior_hccs,0)) * 5200000 AS revenue_leakage
+FROM HCC_RECAPTURE_SUMMARY;
+
+----------------------------------------
+🎨 TASK 3: STREAMLIT UI UPDATE
+----------------------------------------
+
+Update HCC Recapture tab:
+
+- Display 4 KPI cards:
+    1. Recapture Rate (green if high)
+    2. Drop-Off Rate (red if high)
+    3. Opportunity Rate (orange)
+    4. Revenue Leakage (highlight in red)
+
+- Format:
+    - Percentages (2 decimal places)
+    - Revenue in $ format (millions)
+
+- Add insights section:
+    - "High drop-off indicates missed chronic condition coding"
+    - "Opportunity rate highlights members needing outreach"
+    - "Revenue leakage represents missed RAF capture potential"
+
+----------------------------------------
+🤖 TASK 4: ADD CORTEX AI INSIGHT
+----------------------------------------
+
+Use Cortex COMPLETE to generate dynamic insight:
+
+Prompt:
+"Analyze HCC recapture performance. Highlight risks, financial impact, and recommended actions."
+
+----------------------------------------
+🎯 FINAL OUTPUT
+----------------------------------------
+
+Provide:
+1. SQL for summary table creation
+2. SQL for KPI calculation
+3. Updated Streamlit code snippet
+4. Cortex AI integration snippet
+5. Clean UI layout
+
+Ensure:
+- Accurate calculations
+- Clean UI
+- Business-friendly explanations
+- Hackathon-level polished output
+
+
+
+
