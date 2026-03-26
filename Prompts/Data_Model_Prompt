@@ -1,0 +1,96 @@
+You are a Snowflake SQL expert building healthcare analytics views.
+
+We have these BASE TABLES in VBC_ANALYTICS.RAW:
+
+1. MEMBERS (MEMBER_ID PK, FIRST_NAME, LAST_NAME, GENDER, DATE_OF_BIRTH, AGE, CITY, STATE, ENROLLMENT_START_DATE, ENROLLMENT_END_DATE, PAYER_TYPE)
+2. CLAIMS (CLAIM_ID PK, MEMBER_ID, CLAIM_DATE, CLAIM_TYPE [ER/Inpatient/Outpatient/Lab/Preventive], PROVIDER_ID, TOTAL_COST, DIAGNOSIS_CODE, PROCEDURE_CODE)
+3. DIAGNOSES (DIAGNOSIS_ID PK, MEMBER_ID, DIAGNOSIS_CODE, DIAGNOSIS_DESCRIPTION, DIAGNOSIS_DATE, CHRONIC_FLAG [Yes/No])
+4. PROCEDURES (PROCEDURE_ID PK, MEMBER_ID, PROCEDURE_CODE, PROCEDURE_DESCRIPTION, PROCEDURE_DATE)
+5. PROVIDERS (PROVIDER_ID, PROVIDER_NAME, SPECIALITY)
+
+Create 3 summary tables using CREATE OR REPLACE TABLE ... AS SELECT. Execute each one.
+
+---
+
+TABLE 1: VBC_ANALYTICS.RAW.HCC_DASHBOARD_SUMMARY
+
+Purpose: HCC recapture tracking - compare prior-year chronic diagnoses vs current-year to find coding gaps.
+
+Columns needed:
+- PATIENT_ID VARCHAR(10) — the MEMBER_ID
+- PROVIDER_ID VARCHAR(10) — from the most recent claim for that member
+- HCC_CODE VARCHAR(10) — the DIAGNOSIS_CODE (chronic conditions only)
+- GAP_FLAG NUMBER(1,0) — 1 if diagnosis existed in 2024 but NOT in 2025, else 0
+- RECAPTURE_FLAG NUMBER(1,0) — 1 if diagnosis existed in BOTH 2024 and 2025, else 0
+- REVENUE_IMPACT NUMBER(4,0) — 5200 if GAP_FLAG=1, else 0
+
+Logic:
+- Get distinct MEMBER_ID + DIAGNOSIS_CODE from DIAGNOSES where CHRONIC_FLAG='Yes' and YEAR(DIAGNOSIS_DATE)=2024
+- Check if same MEMBER_ID + DIAGNOSIS_CODE exists in 2025
+- If yes → RECAPTURE_FLAG=1, GAP_FLAG=0
+- If no → GAP_FLAG=1, RECAPTURE_FLAG=0
+- Also include 2025-only chronic diagnoses with both flags = 0
+- Get PROVIDER_ID from the member's most recent claim
+- Revenue impact = 5200 per missed HCC
+
+---
+
+TABLE 2: VBC_ANALYTICS.RAW.ER_UTILIZATION_SUMMARY
+
+Purpose: ED visit analysis with non-urgent/avoidable classification.
+
+Columns needed:
+- PATIENT_ID VARCHAR(10) — the MEMBER_ID
+- PROVIDER_ID VARCHAR(10) — from claims
+- VISIT_ID VARCHAR(10) — the CLAIM_ID
+- VISIT_DATE DATE — CLAIM_DATE
+- ED_VISIT_FLAG NUMBER(1,0) — always 1 (only ER claims)
+- NON_URGENT_FLAG NUMBER(1,0) — 1 if diagnosis is non-emergency (codes: J06.9, R10.9, M54.5, R51, R06.00, K21.0, G43.909, J02.9, L30.9, R51, J02.9)
+- COST NUMBER(10,2) — TOTAL_COST
+- PRIMARY_DIAGNOSIS VARCHAR(100) — from DIAGNOSES table matching the claim's DIAGNOSIS_CODE
+- MEMBER_FLAG NUMBER(1,0) — 1 if member exists in MEMBERS table
+- TOTAL_ED_VISITS_YR NUMBER — count of ER claims for that member in the same year
+- MULTIPLE_VISIT_FLAG NUMBER(1,0) — 1 if TOTAL_ED_VISITS_YR >= 3
+- VISIT_TYPE VARCHAR(20) — 'Non-Urgent' if NON_URGENT_FLAG=1, else 'Urgent'
+- AVOIDABLE_ED_FLAG NUMBER(1,0) — same as NON_URGENT_FLAG
+
+Logic:
+- Filter CLAIMS where CLAIM_TYPE = 'ER'
+- Join to DIAGNOSES for PRIMARY_DIAGNOSIS description
+- Classify non-urgent based on diagnosis codes listed above
+- Count total ER visits per member per year for MULTIPLE_VISIT_FLAG
+
+---
+
+TABLE 3: VBC_ANALYTICS.RAW.CARE_GAP_SUMMARY
+
+Purpose: Preventive screening compliance tracking.
+
+Columns needed:
+- PATIENT_ID VARCHAR(10) — the MEMBER_ID
+- PROVIDER_ID VARCHAR(10) — from most recent claim
+- SCREENING_TYPE VARCHAR(29) — type of screening (HbA1c, Chest X-ray, Comprehensive Metabolic Panel, Complete Blood Count, Electrocardiogram, Preventive Visit)
+- ELIGIBLE_FLAG NUMBER(1,0) — 1 if member has a chronic condition requiring that screening
+- COMPLETED_FLAG NUMBER(1,0) — 1 if member has the corresponding procedure in PROCEDURES table
+- GAP_FLAG NUMBER(1,0) — 1 if ELIGIBLE_FLAG=1 AND COMPLETED_FLAG=0
+- VISIT_FLAG NUMBER(1,0) — 1 if member had any claim in 2025
+- MISSED_OPPORTUNITY_FLAG NUMBER(1,0) — 1 if VISIT_FLAG=1 AND GAP_FLAG=1
+- LAST_VISIT_DATE DATE — most recent CLAIM_DATE
+- LAST_SCREENING_DATE DATE — most recent PROCEDURE_DATE for matching procedure code
+
+Screening eligibility mapping:
+- Diabetes (E11%) → HbA1c Screening (procedure code 83036)
+- Any chronic condition → Comprehensive Metabolic Panel (80053)
+- Any chronic condition → Complete Blood Count (85025)
+- Heart conditions (I%) → Electrocardiogram (93000)
+- Lung conditions (J%) → Chest X-ray (71046)
+- All members → Preventive Visit (99395)
+
+Logic:
+- Cross-join eligible members with their required screenings
+- Check PROCEDURES table for completion
+- Check CLAIMS for visit activity
+- Flag gaps and missed opportunities
+
+Execute all 3 CREATE TABLE statements. Verify row counts after each.
+
