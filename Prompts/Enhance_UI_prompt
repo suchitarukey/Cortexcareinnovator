@@ -1,0 +1,161 @@
+You are a Snowflake Cortex + Streamlit + UI/UX expert.
+
+We already have a working Streamlit healthcare analytics app with 3 tabs:
+1. HCC Recapture
+2. Preventive Screening
+3. ER Utilization
+
+DO NOT rebuild the app.
+Enhance the EXISTING app with advanced UI, charts, and styling.
+
+----------------------------------------
+🎯 OBJECTIVE
+----------------------------------------
+Upgrade the dashboard to enterprise-level UI with premium visuals, better charts, and improved usability.
+
+----------------------------------------
+🎨 TASK 1: UPGRADE KPI CARDS (VERY IMPORTANT)
+----------------------------------------
+
+Replace simple st.metric with styled KPI cards using HTML.
+
+Each card should include:
+- Icon (📈 📉 💰 👥 🚑)
+- Title
+- Value (large font)
+- Color-coded background:
+
+    Green → Good metrics (Recapture Rate, Compliance)
+    Red → Risk metrics (Drop-Off, Revenue Leakage)
+    Orange → Opportunity metrics
+    Blue → Neutral metrics
+
+Rounded corners + padding + shadow.
+
+----------------------------------------
+📊 TASK 2: REPLACE ALL CHARTS WITH PLOTLY
+----------------------------------------
+
+Replace:
+- st.bar_chart
+- st.line_chart
+
+WITH Plotly charts.
+
+Use:
+- px.bar (sorted descending)
+- px.line (smooth trend)
+- px.pie with hole=0.5 (DONUT chart)
+
+Color themes:
+- Blue (#1f77b4)
+- Green (#2ca02c)
+- Red (#d62728)
+- Orange (#ff7f0e)
+
+----------------------------------------
+📊 TASK 3: ADD DONUT CHART (MANDATORY)
+----------------------------------------
+
+Add donut charts for:
+
+1. Gap Distribution
+   - GAP_FLAG (0 vs 1)
+
+2. Recapture vs Missed HCCs
+
+3. ER Non-Urgent vs Urgent
+
+Use:
+hole=0.5
+Show % + labels
+
+----------------------------------------
+📈 TASK 4: ADVANCED CHARTS
+----------------------------------------
+
+Implement:
+
+- Horizontal bar chart → Revenue leakage
+- Sorted bar chart → Provider performance
+- Grouped bar → Comparison (optional)
+
+Add:
+- Titles
+- Axis labels
+- Hover tooltips
+- Value labels
+
+----------------------------------------
+📋 TASK 5: UPGRADE TABLES (IMPORTANT)
+----------------------------------------
+
+Replace st.dataframe with styled dataframe.
+
+Add:
+
+- Gradient color on revenue column
+- Highlight:
+    Red → High risk (gap_flag=1)
+    Green → Good performance
+
+- Rename columns to business names:
+    PATIENT_ID → Patient
+    PROVIDER_ID → Provider
+
+- Sort:
+    Highest impact first
+
+----------------------------------------
+✨ TASK 6: AI INSIGHT STYLING
+----------------------------------------
+
+Wrap insights:
+
+- st.success() → positive
+- st.warning() → medium risk
+- st.error() → high risk
+
+----------------------------------------
+📦 TASK 7: LAYOUT IMPROVEMENT
+----------------------------------------
+
+- Use st.container() for sections
+- Add headings:
+    📊 Overview
+    📈 Insights
+    📋 Details
+
+- Add spacing:
+    st.markdown("---")
+
+----------------------------------------
+🎨 TASK 8: CONSISTENT DESIGN
+----------------------------------------
+
+Ensure:
+- Same colors across all tabs
+- Clean alignment
+- No clutter
+- Executive dashboard feel
+
+----------------------------------------
+🎯 OUTPUT
+----------------------------------------
+
+Provide:
+
+1. Updated Streamlit code snippets:
+   - KPI cards (HTML styled)
+   - Plotly charts (bar, donut, line)
+   - Styled dataframe
+
+2. Replace-only instructions (no full rewrite)
+
+Ensure:
+✔ No breaking existing app
+✔ Clean integration
+✔ Premium UI
+✔ Hackathon winning design
+
+
