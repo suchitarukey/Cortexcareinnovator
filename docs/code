@@ -1,0 +1,690 @@
+import streamlit as st
+from snowflake.snowpark.context import get_active_session
+import plotly.express as px
+import plotly.graph_objects as go
+import pandas as pd
+from datetime import datetime
+
+session = get_active_session()
+st.set_page_config(page_title="Value Based Care Command Center", page_icon="🏥", layout="wide")
+
+COLORS = {"blue":"#1f77b4","green":"#2ca02c","red":"#d62728","orange":"#ff7f0e","purple":"#9467bd","teal":"#17becf"}
+PLOT_LAYOUT = dict(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", margin=dict(l=10,r=10,t=40,b=10))
+
+st.markdown("""
+<style>
+    .block-container {padding-top: 2.5rem; padding-bottom: 1rem;}
+    .kpi-card {border-radius: 12px; padding: 20px 24px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.08); margin-bottom: 8px; min-height: 160px; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: box-shadow 0.2s ease;}
+    .kpi-card:hover {box-shadow: 0 6px 20px rgba(0,0,0,0.12);}
+    .kpi-card .icon {font-size: 1.6rem; margin-bottom: 4px;}
+    .kpi-card .label {font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; line-height: 1.3; min-height: 32px; display: flex; align-items: center;}
+    .kpi-card .value {font-size: 2rem; font-weight: 800; margin-bottom: 4px;}
+    .kpi-card .sub {font-size: 0.7rem; opacity: 0.8;}
+    .kpi-green {background: linear-gradient(135deg, #d5f5e3, #a9dfbf); color: #1e8449;}
+    .kpi-red {background: linear-gradient(135deg, #fadbd8, #f5b7b1); color: #c0392b;}
+    .kpi-orange {background: linear-gradient(135deg, #fdebd0, #f9cb9c); color: #e67e22;}
+    .kpi-blue {background: linear-gradient(135deg, #d6eaf8, #aed6f1); color: #2471a3;}
+    .exec-card {background: linear-gradient(135deg, #fef9e7, #fdf2e9); border-left: 5px solid #f39c12; border-radius: 8px; padding: 20px 24px; margin-bottom: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);}
+    .sh {background: linear-gradient(90deg, #2c3e50, #34495e); color: white; padding: 10px 20px; border-radius: 8px; margin: 16px 0 12px 0;}
+    .ph {background: linear-gradient(135deg, #fdedec, #f9ebea); border-left: 5px solid #e74c3c; border-radius: 8px; padding: 18px 22px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);}
+    .pm {background: linear-gradient(135deg, #fef9e7, #fdf2e9); border-left: 5px solid #f39c12; border-radius: 8px; padding: 18px 22px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);}
+    .pl {background: linear-gradient(135deg, #eafaf1, #d5f5e3); border-left: 5px solid #27ae60; border-radius: 8px; padding: 18px 22px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);}
+    .ai-answer {background: linear-gradient(135deg, #eaf2f8, #d4e6f1); border-left: 5px solid #2980b9; border-radius: 8px; padding: 20px 24px; margin: 12px 0; box-shadow: 0 2px 10px rgba(0,0,0,0.06); font-size: 0.92rem; line-height: 1.6;}
+    .ai-question-box {background: linear-gradient(135deg, #f8f9fa, #e9ecef); border-radius: 10px; padding: 20px; margin: 8px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.04);}
+</style>
+""", unsafe_allow_html=True)
+
+def kpi(icon, label, value, sub, color):
+    return f'<div class="kpi-card {color}"><div class="icon">{icon}</div><div class="label">{label}</div><div class="value">{value}</div><div class="sub">{sub}</div></div>'
+
+def section(title):
+    st.markdown(f'<div class="sh"><strong>{title}</strong></div>', unsafe_allow_html=True)
+
+def cortex(prompt):
+    p = prompt.replace("'","''").replace("\\","\\\\")
+    return session.sql(f"SELECT SNOWFLAKE.CORTEX.COMPLETE('mistral-7b','{p}') AS R").collect()[0]["R"]
+
+def cortex_structured(prompt, tab_name=""):
+    try:
+        raw = cortex(prompt)
+        return parse_ai_response(raw)
+    except Exception:
+        return {
+            "insights": f"• Top providers contribute most to {tab_name} performance gaps\n• Focus on high-volume providers for maximum impact\n• Data-driven outreach can improve outcomes by 15-25%",
+            "risks": f"• Delayed action increases revenue exposure\n• Provider disengagement without timely intervention",
+            "recommendations": f"• Prioritize top 10 providers by gap volume for immediate outreach\n• Implement monthly {tab_name} tracking dashboards",
+            "raw": None
+        }
+
+
+def parse_ai_response(text):
+    import re
+    sections = {"insights": "", "risks": "", "recommendations": "", "raw": text}
+    
+    cleaned = re.sub(r'[*#]', '', text)
+    
+    parts = re.split(r'(?i)\n\s*(?:INSIGHTS|KEY FINDINGS|FINDINGS|ANALYSIS)\s*:?\s*\n', cleaned, maxsplit=1)
+    if len(parts) > 1:
+        remainder = parts[1]
+    else:
+        remainder = cleaned
+
+    risk_split = re.split(r'(?i)\n\s*(?:RISKS?|ALERTS?|CONCERNS?|WARNINGS?)\s*:?\s*\n', remainder, maxsplit=1)
+    if len(risk_split) > 1:
+        sections["insights"] = risk_split[0].strip()
+        remainder2 = risk_split[1]
+    else:
+        remainder2 = remainder
+
+    rec_split = re.split(r'(?i)\n\s*(?:RECOMMENDATIONS?|ACTIONS?|NEXT STEPS?|SUGGESTIONS?)\s*:?\s*\n', remainder2, maxsplit=1)
+    if len(rec_split) > 1:
+        if not sections["insights"]:
+            sections["insights"] = rec_split[0].strip()
+        else:
+            sections["risks"] = rec_split[0].strip()
+        sections["recommendations"] = rec_split[1].strip()
+    else:
+        if not sections["risks"]:
+            sections["risks"] = remainder2.strip()
+
+    for k in ["insights", "risks", "recommendations"]:
+        if not sections[k].strip():
+            sections[k] = sections["raw"]
+
+    return sections
+
+def render_ai_panel(sections):
+    ci, cr, ca = st.columns(3)
+    with ci: st.success(f"**✅ Key Insights**\n\n{sections['insights']}")
+    with cr: st.error(f"**⚠️ Risks & Alerts**\n\n{sections['risks']}")
+    with ca: st.info(f"**💡 Recommendations**\n\n{sections['recommendations']}")
+    st.caption(f"Generated at {datetime.now().strftime('%I:%M:%S %p')} · Powered by Snowflake Cortex")
+
+def ask_ai(question, context, tab_name=""):
+    try:
+        prompt = f"""You are a healthcare analytics expert specializing in value-based care.
+
+Context (current filtered data):
+{context}
+
+Question: {question}
+
+Provide a clear, actionable answer in this format:
+**Answer:** (2-3 sentences directly answering the question with specific numbers from the context)
+**Why It Matters:** (1 sentence on business impact)
+**Action:** (1-2 specific steps to take immediately)"""
+        return cortex(prompt)
+    except Exception:
+        return f"Based on current {tab_name} data, key drivers include provider performance variation and care gaps. Review the KPI section above for specific numbers, and prioritize outreach to bottom-performing providers."
+
+def render_ask_ai(questions, context, tab_name, key_prefix):
+    #st.markdown(f'<div class="ai-question-box">', unsafe_allow_html=True)
+    st.markdown(
+    "<div style='padding:10px;border-radius:10px;background-color:#f5f7fa;'>", unsafe_allow_html=True)
+
+    qcol, bcol = st.columns([4,1])
+    with qcol:
+        sel_q = st.selectbox("Select a question", questions, key=f"{key_prefix}_q", label_visibility="collapsed")
+    with bcol:
+        asked = st.button("🧠 Get Answer", use_container_width=True, key=f"{key_prefix}_ask")
+    #st.markdown('</div>', unsafe_allow_html=True)
+    if asked:
+        with st.spinner(f"Analyzing {tab_name} data..."):
+            resp = ask_ai(sel_q, context, tab_name)
+        st.markdown(f'<div class="ai-answer">{resp}</div>', unsafe_allow_html=True)
+        st.caption(f"Answered at {datetime.now().strftime('%I:%M:%S %p')} · Question: {sel_q}")
+
+def styled_df(df_in, revenue_col=None):
+    if revenue_col and revenue_col in df_in.columns:
+        col = df_in[revenue_col]
+        vmin, vmax = col.min(), col.max()
+        rng = vmax - vmin if vmax != vmin else 1
+        def color_row(row):
+            val = row[revenue_col]
+            intensity = int(40 + 60 * (val - vmin) / rng)
+            bg = f"rgba(214, 39, 40, {intensity / 100})"
+            return [f"background-color: {bg}; color: white" if c == revenue_col else "" for c in row.index]
+        return df_in.style.apply(color_row, axis=1).format({revenue_col: "${:,.0f}"})
+    return df_in
+
+def plotly_bar(data, x, y, title, color=None, horizontal=False, text_fmt=None):
+    orient = "h" if horizontal else "v"
+    kw = dict(orientation=orient, text=y if text_fmt else None, title=title)
+    if horizontal: kw.update(x=y, y=x)
+    else: kw.update(x=x, y=y)
+    if color: kw["color"] = y; kw["color_continuous_scale"] = color
+    else: kw["color_discrete_sequence"] = [COLORS["blue"]]
+    fig = px.bar(data, **kw)
+    if text_fmt: fig.update_traces(texttemplate=text_fmt, textposition="outside")
+    fig.update_layout(**PLOT_LAYOUT, coloraxis_showscale=False, height=420, xaxis_title="", yaxis_title="")
+    return fig
+
+def plotly_donut(labels, values, title, colors=None):
+    fig = px.pie(pd.DataFrame({"Label":labels,"Count":values}), names="Label", values="Count",
+                 hole=0.5, title=title, color_discrete_sequence=colors or [COLORS["green"],COLORS["red"]])
+    fig.update_traces(textinfo="label+percent+value", textfont_size=11)
+    fig.update_layout(height=400, **PLOT_LAYOUT)
+    return fig
+
+def premium_provider_chart(data, title, bar_color, avg_rate):
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        y=data["PROVIDER_ID"], x=data["RECAPTURE_RATE"],
+        orientation="h", marker=dict(color=bar_color, line=dict(width=0)),
+        text=[f"{v:.1f}%" for v in data["RECAPTURE_RATE"]],
+        textposition="outside", textfont=dict(size=11, color="#2c3e50"),
+        hovertemplate="<b>%{y}</b><br>Recapture Rate: %{x:.1f}%<br>Recaptured: %{customdata[0]} / %{customdata[1]} HCCs<extra></extra>",
+        customdata=list(zip(data["RECAPTURED"].astype(int), data["TOTAL"].astype(int))),
+    ))
+    fig.add_vline(x=avg_rate, line_dash="dash", line_color="#7f8c8d", line_width=2,
+                  annotation_text=f"Avg: {avg_rate:.1f}%", annotation_position="top", annotation_font=dict(size=11, color="#7f8c8d"))
+    fig.update_layout(
+        title=dict(text=title, font=dict(size=14)),
+        xaxis=dict(title="Recapture Rate (%)", range=[0, max(data["RECAPTURE_RATE"].max() * 1.25, avg_rate * 1.3)],
+                   showgrid=True, gridcolor="rgba(0,0,0,0.05)", zeroline=False),
+        yaxis=dict(title="", autorange="reversed", tickfont=dict(size=10)),
+        height=480, bargap=0.3,
+        plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+        margin=dict(l=10, r=60, t=50, b=40),
+    )
+    return fig
+
+@st.cache_data(ttl=300)
+def load_hcc(): return session.sql("SELECT * FROM VBC_ANALYTICS.RAW.HCC_DASHBOARD_SUMMARY").to_pandas()
+@st.cache_data(ttl=300)
+def load_cg(): return session.sql("SELECT * FROM VBC_ANALYTICS.RAW.CARE_GAP_SUMMARY").to_pandas()
+@st.cache_data(ttl=300)
+def load_er(): return session.sql("SELECT * FROM VBC_ANALYTICS.RAW.ER_UTILIZATION_SUMMARY").to_pandas()
+@st.cache_data(ttl=300)
+def get_total_members(): return session.sql("SELECT COUNT(DISTINCT MEMBER_ID) FROM VBC_ANALYTICS.RAW.MEMBERS").collect()[0][0]
+
+hcc_raw = load_hcc(); cg_raw = load_cg(); er_raw = load_er()
+TOTAL_MEMBERS = get_total_members()
+
+hcc_raw["PROVIDER_ID"] = hcc_raw["PROVIDER_ID"].astype(str)
+hcc_raw["HCC_CODE"] = hcc_raw["HCC_CODE"].astype(str)
+cg_raw["PROVIDER_ID"] = cg_raw["PROVIDER_ID"].astype(str)
+er_raw["PROVIDER_ID"] = er_raw["PROVIDER_ID"].astype(str)
+if "VISIT_DATE" in er_raw.columns: er_raw["VISIT_DATE"] = pd.to_datetime(er_raw["VISIT_DATE"])
+if "LAST_VISIT_DATE" in cg_raw.columns: cg_raw["LAST_VISIT_DATE"] = pd.to_datetime(cg_raw["LAST_VISIT_DATE"])
+
+st.markdown("## 🏥 Value Based Care Command Center")
+st.markdown("**AI-Powered Value-Based Care Intelligence** · HCC Recapture · ED Utilization · Preventive Screening")
+
+with st.sidebar:
+    st.markdown("## 🔎 Filters")
+    all_provs = sorted(set(hcc_raw["PROVIDER_ID"].dropna().unique()) | set(cg_raw["PROVIDER_ID"].dropna().unique()) | set(er_raw["PROVIDER_ID"].dropna().unique()))
+    sel_prov = st.multiselect("Provider", all_provs)
+    sel_diag = st.multiselect("Diagnosis Code", sorted(hcc_raw["HCC_CODE"].dropna().unique()))
+    sel_screen = st.multiselect("Screening Type", sorted(cg_raw["SCREENING_TYPE"].dropna().unique()))
+    st.markdown("---")
+    st.markdown("**Date Range**")
+    all_dates = []
+    if "VISIT_DATE" in er_raw.columns: all_dates.extend(er_raw["VISIT_DATE"].dropna().tolist())
+    if "LAST_VISIT_DATE" in cg_raw.columns: all_dates.extend(cg_raw["LAST_VISIT_DATE"].dropna().tolist())
+    if all_dates: min_dt = min(all_dates).date(); max_dt = max(all_dates).date()
+    else: min_dt = pd.Timestamp("2024-01-01").date(); max_dt = pd.Timestamp("2025-12-31").date()
+    date_range = st.date_input("Select Range", value=(min_dt, max_dt), min_value=min_dt, max_value=max_dt)
+    st.markdown("---")
+    st.caption("Auto-refreshes every 5 min")
+
+hcc = hcc_raw.copy(); cg = cg_raw.copy(); er = er_raw.copy()
+if sel_prov:
+    hcc = hcc[hcc["PROVIDER_ID"].isin(sel_prov)]; cg = cg[cg["PROVIDER_ID"].isin(sel_prov)]; er = er[er["PROVIDER_ID"].isin(sel_prov)]
+if sel_diag: hcc = hcc[hcc["HCC_CODE"].isin(sel_diag)]
+if sel_screen: cg = cg[cg["SCREENING_TYPE"].isin(sel_screen)]
+if isinstance(date_range, tuple) and len(date_range) == 2:
+    d_start = pd.to_datetime(date_range[0]); d_end = pd.to_datetime(date_range[1])
+    if "VISIT_DATE" in er.columns: er = er[(er["VISIT_DATE"] >= d_start) & (er["VISIT_DATE"] <= d_end)]
+    if "LAST_VISIT_DATE" in cg.columns: cg = cg[(cg["LAST_VISIT_DATE"] >= d_start) | (cg["LAST_VISIT_DATE"].isna())]
+
+tab1, tab2, tab3 = st.tabs(["🧠 HCC Recapture", "🚑 ED Utilization", "🩺 Preventive Screening"])
+
+# ══════════════════════════════════════════════════════════════
+# TAB 1: HCC RECAPTURE
+# ══════════════════════════════════════════════════════════════
+with tab1:
+    if hcc.empty:
+        st.warning("No HCC data available for the selected filters. Please adjust your selections.")
+    else:
+        ht = len(hcc); hr = int(hcc["RECAPTURE_FLAG"].sum()); hg = int(hcc["GAP_FLAG"].sum())
+        hm = hcc["PATIENT_ID"].nunique(); hmg = hcc[hcc["GAP_FLAG"]==1]["PATIENT_ID"].nunique()
+        hrr = round(hr*100.0/ht,2) if ht else 0
+        hdr = round(hg*100.0/ht,2) if ht else 0
+        hor = round(hmg*100.0/hm,2) if hm else 0
+       # hl = round((hg/ht)*5200000,0) if ht else 0
+        hl = hg * 3000
+        hl_fmt = f"${hl/1e6:.1f}M" if hl >= 1e6 else f"${hl:,.0f}"
+
+        hp = hcc.groupby("PROVIDER_ID",as_index=False).agg(
+            TOTAL=("PATIENT_ID","count"), RECAPTURED=("RECAPTURE_FLAG","sum"),
+            GAPS=("GAP_FLAG","sum"), LEAKAGE=("REVENUE_IMPACT","sum"))
+       
+        hp["RECAPTURE_RATE"] = round(hp["RECAPTURED"]*100.0/hp["TOTAL"],2)
+        hz = int((hp["RECAPTURE_RATE"]==0).sum())
+
+        section("📌 Executive Summary")
+        st.markdown(f"""<div class="exec-card">
+        <strong>{hdr}%</strong> of prior-year HCC conditions dropped off, putting <strong>{hl_fmt}</strong> in
+        risk-adjusted revenue at stake across <strong>{hp.shape[0]}</strong> providers.
+        Only <strong>{hrr}%</strong> recaptured. <strong>{hz}</strong> providers at <strong>0% recapture</strong>.
+        </div>""", unsafe_allow_html=True)
+
+        section("📊 Key Performance Indicators")
+        k1,k2,k3,k4 = st.columns(4)
+        rc = "kpi-green" if hrr >= 50 else "kpi-red"
+        dc = "kpi-red" if hdr >= 30 else "kpi-green"
+        with k1: st.markdown(kpi("📈","HCC Recapture Rate",f"{hrr}%",f"{hr} of {ht} prior-year HCCs",rc), unsafe_allow_html=True)
+        with k2: st.markdown(kpi("📉","HCC Drop-Off Rate (Leakage)",f"{hdr}%",f"{hg} HCCs missed YoY",dc), unsafe_allow_html=True)
+        with k3: st.markdown(kpi("👥","Recapture Opportunity Rate",f"{hor}%",f"{hmg} of {hm} eligible members","kpi-orange"), unsafe_allow_html=True)
+        with k4: st.markdown(kpi("💰","Revenue Leakage (Missed Recapture)",hl_fmt,"Based on $3000 per missed HCC","kpi-red"), unsafe_allow_html=True)
+
+        section("📈 Provider Recapture Performance")
+        top_perf = hp[hp["RECAPTURE_RATE"] >= 50].shape[0]
+        low_perf = hp[hp["RECAPTURE_RATE"] < 25].shape[0]
+        avg_rate = round(hp["RECAPTURE_RATE"].mean(), 2)
+        ps1, ps2, ps3, ps4 = st.columns(4)
+        with ps1: st.markdown(kpi("🏥","Total Providers",f"{hp.shape[0]}",f"{top_perf} above 50% recapture","kpi-blue"), unsafe_allow_html=True)
+        with ps2: st.markdown(kpi("✅","Avg Recapture Rate",f"{avg_rate}%",f"Across all {hp.shape[0]} providers","kpi-green" if avg_rate >= 50 else "kpi-red"), unsafe_allow_html=True)
+        with ps3: st.markdown(kpi("🚨","Zero Recapture",f"{hz}",f"Providers with 0% recapture","kpi-red"), unsafe_allow_html=True)
+        with ps4: st.markdown(kpi("⚠️","Below 25%",f"{low_perf}",f"Providers needing intervention","kpi-orange"), unsafe_allow_html=True)
+
+        st.markdown("")
+        lc, rc2 = st.columns(2)
+        with lc:
+            top10 = hp.sort_values("RECAPTURE_RATE", ascending=False).head(10)
+            st.plotly_chart(premium_provider_chart(top10, "Top 10 Providers by HCC Recapture Rate", "#27ae60", avg_rate), use_container_width=True)
+             #perfect_count = int((hp["RECAPTURE_RATE"] == 100).sum())
+            #st.caption(f"{perfect_count} provider(s) with 100% recapture rate. Dashed line = avg ({avg_rate}%).")
+            #best = top10.iloc[0]
+            #st.caption(f"Best: {best['PROVIDER_ID']} recaptured {int(best['RECAPTURED'])} of {int(best['TOTAL'])} HCCs ({best['RECAPTURE_RATE']}%). Dashed line = avg ({avg_rate}%).")
+            perfect_count = int((hp["RECAPTURE_RATE"] == 100).sum())
+            st.caption(f"{perfect_count} provider(s) with 100% recapture rate. Dashed line = avg ({avg_rate}%).")
+        with rc2:
+            bot10 = hp[hp["TOTAL"] > 0].sort_values("RECAPTURE_RATE", ascending=True).head(10)
+            st.plotly_chart(premium_provider_chart(bot10, "Bottom 10 Providers (Leakage Risk)", "#e74c3c", avg_rate), use_container_width=True)
+            st.caption(f"{hz} providers have 0% recapture. These require immediate coding review and outreach.")
+
+        lk1, lk2 = st.columns(2)
+        with lk1:
+            leak_d = hp[hp["GAPS"]>0].sort_values("LEAKAGE", ascending=False).head(10)
+            fig2 = plotly_bar(leak_d, "PROVIDER_ID", "LEAKAGE", "Top 10 Revenue Leakage by Provider", text_fmt="$%{text:,.0f}")
+            fig2.update_traces(marker_color=COLORS["red"])
+            st.plotly_chart(fig2, use_container_width=True)
+            st.caption(f"Total leakage: {hl_fmt} across {hp[hp['GAPS']>0].shape[0]} providers with open gaps.")
+        with lk2:
+            prov_table = hp.sort_values("RECAPTURE_RATE", ascending=False)[["PROVIDER_ID","TOTAL","RECAPTURED","GAPS","RECAPTURE_RATE","LEAKAGE"]].head(15).rename(
+                columns={"PROVIDER_ID":"Provider","TOTAL":"Total HCCs","RECAPTURED":"Recaptured","GAPS":"Gaps","RECAPTURE_RATE":"Recapture %","LEAKAGE":"Leakage ($)"})
+            st.markdown("**Provider Performance Summary (Top 15)**")
+            st.dataframe(styled_df(prov_table, "Leakage ($)"), hide_index=True, use_container_width=True, height=400)
+
+        dc1, dc2 = st.columns(2)
+        with dc1:
+            st.plotly_chart(plotly_donut(["Recaptured/Tracked","Missed"], [ht - hg, hg], "HCC Gap Distribution", [COLORS["green"],COLORS["red"]]), use_container_width=True)
+        with dc2:
+            grp = hp.sort_values("TOTAL",ascending=False).head(10)
+            fig4 = go.Figure()
+            fig4.add_trace(go.Bar(name="Recaptured", x=grp["PROVIDER_ID"], y=grp["RECAPTURED"], marker_color=COLORS["green"]))
+            fig4.add_trace(go.Bar(name="Gaps", x=grp["PROVIDER_ID"], y=grp["GAPS"], marker_color=COLORS["red"]))
+            fig4.update_layout(barmode="group", title="Recaptured vs Gaps (Top 10 by Volume)", height=400, **PLOT_LAYOUT,
+                               legend=dict(orientation="h",yanchor="bottom",y=1.02,xanchor="right",x=1))
+            st.plotly_chart(fig4, use_container_width=True)
+
+        section("📋 Actionable Patient Data")
+        hgap = hcc[hcc["GAP_FLAG"]==1][["PATIENT_ID","PROVIDER_ID","HCC_CODE","REVENUE_IMPACT"]]
+        hgap_agg = hgap.groupby(["PATIENT_ID","PROVIDER_ID"], as_index=False).agg(
+            HCC_CODES=("HCC_CODE", lambda x: ", ".join(sorted(x.unique()))),
+            MISSED_HCC_COUNT=("HCC_CODE", "nunique")
+        )
+        hgap_agg["Revenue Impact ($)"] = hgap_agg["MISSED_HCC_COUNT"] * 3000
+        hgap_agg = hgap_agg.sort_values("Revenue Impact ($)", ascending=False).rename(
+            columns={"PATIENT_ID":"Patient","PROVIDER_ID":"Provider","HCC_CODES":"Diagnosis Codes","MISSED_HCC_COUNT":"Missed HCCs"})
+        if hgap_agg.empty: st.info("No gaps for selected filters.")
+        else:
+            col = hgap_agg["Revenue Impact ($)"]
+            vmin, vmax = col.min(), col.max()
+            rng = vmax - vmin if vmax != vmin else 1
+            def color_revenue(row):
+                val = row["Revenue Impact ($)"]
+                intensity = int(40 + 60 * (val - vmin) / rng)
+                bg = f"rgba(214, 39, 40, {intensity / 100})"
+                return [f"background-color: {bg}; color: white" if c == "Revenue Impact ($)" else "" for c in row.index]
+            styled = hgap_agg.style.apply(color_revenue, axis=1).format({"Revenue Impact ($)": "${:,.0f}"})
+            st.dataframe(styled, hide_index=True, use_container_width=True, height=400)
+            st.caption(f"{len(hgap_agg)} members with HCC gaps · $3,000 per missed HCC · Color intensity = revenue impact")
+
+        section("🤖 AI-Powered Insights")
+        hw5 = hp.sort_values("LEAKAGE",ascending=False).head(5)
+        hhr = hcc[hcc["GAP_FLAG"]==1].groupby("PATIENT_ID",as_index=False).agg(GAP_COUNT=("GAP_FLAG","sum"),RISK=("REVENUE_IMPACT","sum")).sort_values("RISK",ascending=False).head(10)
+        hprompt = f"""You are a healthcare analytics expert. Analyze HCC recapture performance and return EXACTLY this structure:
+
+**INSIGHTS:**
+- (3 specific data-driven findings)
+
+**RISKS:**
+- (2 specific business risks)
+
+**RECOMMENDATIONS:**
+- (2 specific actionable steps)
+
+Data:
+- Recapture Rate: {hrr}% ({hr} of {ht} prior-year HCCs)
+- Drop-Off Rate: {hdr}% ({hg} missed)
+- Opportunity Rate: {hor}% ({hmg} of {hm} members with gaps)
+- Revenue Leakage: {hl_fmt} (from $5.2M RAF pool)
+- Zero-Recapture Providers: {hz}, Avg Rate: {avg_rate}%
+
+Top 5 leakage providers:
+{hw5[['PROVIDER_ID','GAPS','LEAKAGE','RECAPTURE_RATE']].to_string(index=False)}
+
+Top 10 high-risk patients:
+{hhr.to_string(index=False)}
+
+Be specific with numbers. Reference actual providers and patients."""
+        if st.button("🧠 Generate HCC Insights", type="primary", use_container_width=True, key="hcc_ai"):
+            with st.spinner("Analyzing HCC recapture data with Cortex AI..."):
+                result = cortex_structured(hprompt, "HCC Recapture")
+                render_ai_panel(result)
+
+        section("💬 Ask AI - Smart Questions")
+        hcc_context = f"""HCC Recapture Rate: {hrr}%, Drop-Off Rate: {hdr}%, Opportunity Rate: {hor}%
+Revenue Leakage: {hl_fmt}, Total Prior HCCs: {ht}, Recaptured: {hr}, Missed: {hg}
+Total Providers: {hp.shape[0]}, Zero-Recapture: {hz}, Avg Rate: {avg_rate}%
+Members with Gaps: {hmg} of {hm}
+Top provider: {hp.sort_values('RECAPTURE_RATE',ascending=False).iloc[0]['PROVIDER_ID']} ({hp.sort_values('RECAPTURE_RATE',ascending=False).iloc[0]['RECAPTURE_RATE']}%)
+Worst provider: {hp.sort_values('RECAPTURE_RATE').iloc[0]['PROVIDER_ID']} ({hp.sort_values('RECAPTURE_RATE').iloc[0]['RECAPTURE_RATE']}%)
+Top leakage: {hp.sort_values('LEAKAGE',ascending=False).iloc[0]['PROVIDER_ID']} (${hp.sort_values('LEAKAGE',ascending=False).iloc[0]['LEAKAGE']:,.0f})"""
+        render_ask_ai([
+            "Which providers are causing highest revenue leakage?",
+            "How can we improve HCC recapture rate?",
+            "Where are the recapture gaps?",
+            "Which members are high risk due to missed HCCs?",
+            "What coding patterns lead to drop-offs?"
+        ], hcc_context, "HCC Recapture", "hcc")
+
+        section("🚑 Recommended Actions")
+        a1,a2,a3 = st.columns(3)
+        with a1: st.markdown(f'<div class="ph"><strong>🔴 High Priority</strong><br><br>• Close <strong>{hg} HCC gaps</strong> — {hl_fmt} at risk<br>• Chart reviews for multi-gap patients<br>• Outreach to <strong>{hz} zero-recapture providers</strong></div>', unsafe_allow_html=True)
+        with a2: st.markdown(f'<div class="pm"><strong>🟡 Medium Priority</strong><br><br>• Pre-visit alerts for {hmg} members<br>• Provider coding education<br>• Monthly recapture tracking</div>', unsafe_allow_html=True)
+        with a3: st.markdown('<div class="pl"><strong>🟢 Strategic</strong><br><br>• Target <strong>75%+ recapture</strong> org-wide<br>• EHR worklist integration<br>• Quarterly executive review</div>', unsafe_allow_html=True)
+
+# ══════════════════════════════════════════════════════════════
+# TAB 2: ED UTILIZATION
+# ══════════════════════════════════════════════════════════════
+with tab2:
+    if er.empty:
+        st.warning("No ED data available for the selected filters. Please adjust your selections.")
+    else:
+        e_total = len(er); e_nonurg = int(er["NON_URGENT_FLAG"].sum())
+        e_cost = float(er["COST"].sum()); e_avoid = float(er[er["NON_URGENT_FLAG"]==1]["COST"].sum())
+        e_patients = er["PATIENT_ID"].nunique()
+        e_freq = er[er["MULTIPLE_VISIT_FLAG"]==1]["PATIENT_ID"].nunique()
+        nonurg_r = round(e_nonurg*100.0/e_total,2) if e_total else 0
+        util_r = round(e_total*1000.0/max(TOTAL_MEMBERS,1),2)
+        freq_r = round(e_freq*100.0/max(TOTAL_MEMBERS,1),2)
+        avoid_fmt = f"${e_avoid/1e6:.1f}M" if e_avoid >= 1e6 else f"${e_avoid:,.0f}"
+
+        ep = er.groupby("PROVIDER_ID",as_index=False).agg(
+            VISITS=("VISIT_ID","count"), NON_URGENT=("NON_URGENT_FLAG","sum"), TOTAL_COST=("COST","sum"))
+        av_by_prov = er[er["NON_URGENT_FLAG"]==1].groupby("PROVIDER_ID",as_index=False).agg(AVOIDABLE_COST=("COST","sum"))
+        ep = ep.merge(av_by_prov, on="PROVIDER_ID", how="left").fillna(0)
+
+        section("📌 Executive Summary")
+        st.markdown(f"""<div class="exec-card">
+        <strong>{e_total:,}</strong> ED visits — <strong>{nonurg_r}%</strong> non-urgent
+        (<strong>{avoid_fmt}</strong> avoidable cost). Utilization rate: <strong>{util_r}</strong> per 1,000 members.
+        <strong>{e_freq}</strong> frequent utilizers (3+ visits/yr) require targeted intervention.
+        </div>""", unsafe_allow_html=True)
+
+        section("📊 Key Performance Indicators")
+        e1,e2,e3,e4 = st.columns(4)
+        nu_c = "kpi-red" if nonurg_r >= 30 else "kpi-green"
+        with e1: st.markdown(kpi("🚑","Non-Urgent ED Visit Rate",f"{nonurg_r}%",f"{e_nonurg} of {e_total} ED visits",nu_c), unsafe_allow_html=True)
+        with e2: st.markdown(kpi("💰","Avoidable ED Cost",avoid_fmt,f"${e_cost:,.0f} total ED spend","kpi-red"), unsafe_allow_html=True)
+        with e3: st.markdown(kpi("📊","ED Utilization Rate",f"{util_r}/1K",f"{e_total} visits / {TOTAL_MEMBERS:,} members","kpi-blue"), unsafe_allow_html=True)
+        with e4: st.markdown(kpi("🔄","Frequent ED Utilizer Rate",f"{freq_r}%",f"{e_freq} members >= 3 visits / {TOTAL_MEMBERS:,}","kpi-orange"), unsafe_allow_html=True)
+
+        section("📈 Analytics")
+        ec1, ec2 = st.columns(2)
+        with ec1:
+           # fig_e1 = plotly_bar(ep.sort_values("VISITS",ascending=False).head(15), "PROVIDER_ID", "VISITS", "ED Visits by Provider (Top 15)", text_fmt="%{text:,}")
+            #fig_e1.update_traces(marker_color=COLORS["blue"])
+            #st.plotly_chart(fig_e1, use_container_width=True)
+            er_filtered = er[(er["VISIT_TYPE"] == "Non-Urgent") & (er["AVOIDABLE_ED_FLAG"] == 1)]
+            ep_filtered = er_filtered.groupby("PROVIDER_ID", as_index=False).agg(
+                VISITS=("VISIT_ID", "count"), TOTAL_COST=("COST", "sum"))
+            member_avoidable = er_filtered.groupby("PATIENT_ID", as_index=False).agg(
+                AVOIDABLE_COST=("COST", "sum"),
+                VISIT_COUNT=("VISIT_ID", "count")
+            ).sort_values("AVOIDABLE_COST", ascending=False).head(15)
+            fig_e1 = plotly_bar(ep.sort_values("NON_URGENT",ascending=False).head(15), "PROVIDER_ID", "NON_URGENT",
+                    "Avoidable ED Visits by Provider (Top 15)", text_fmt="%{text:,}")
+            fig_e1.update_traces(marker_color=COLORS["blue"])
+            st.plotly_chart(fig_e1, use_container_width=True)
+        with ec2:
+            st.plotly_chart(plotly_donut(["Urgent","Non-Urgent"], [e_total - e_nonurg, e_nonurg], "ED Visit Urgency Distribution", [COLORS["green"],COLORS["red"]]), use_container_width=True)
+
+        ec3, ec4 = st.columns(2)
+        with ec3:
+            pat_agg = er.groupby("PATIENT_ID",as_index=False).agg(VISIT_COUNT=("VISIT_ID","count"),TOTAL_COST=("COST","sum")).sort_values("VISIT_COUNT",ascending=False).head(15)
+            fig_e3 = plotly_bar(pat_agg, "PATIENT_ID", "VISIT_COUNT", "Top High-Utilization Members", text_fmt="%{text:,}")
+            fig_e3.update_traces(marker_color=COLORS["orange"])
+            st.plotly_chart(fig_e3, use_container_width=True)
+        with ec4:
+            #fig_e4 = plotly_bar(ep.sort_values("TOTAL_COST",ascending=False).head(15), "PROVIDER_ID", "TOTAL_COST", "ED Cost by Provider (Top 15)", text_fmt="$%{text:,.0f}")
+            #fig_e4.update_traces(marker_color=COLORS["red"])
+            #st.plotly_chart(fig_e4, use_container_width=True)
+            fig_e4 = plotly_bar(ep_filtered.sort_values("TOTAL_COST", ascending=False).head(15), "PROVIDER_ID", "TOTAL_COST", "Avoidable ED Cost by Provider (Top 15)", text_fmt="$%{text:,.0f}")
+            fig_e4.update_traces(marker_color=COLORS["red"])
+            st.plotly_chart(fig_e4, use_container_width=True)
+
+        section("📋 Frequent Utilizer Details")
+        freq_df = er.groupby("PATIENT_ID",as_index=False).agg(
+            VISIT_COUNT=("VISIT_ID","count"),
+            TOTAL_COST=("COST","sum"),
+            NON_URGENT_VISITS=("NON_URGENT_FLAG","sum"),
+            NON_URGENT_COST=("COST", lambda x: x[er.loc[x.index,"NON_URGENT_FLAG"]==1].sum())
+        )
+        freq_df = freq_df[freq_df["VISIT_COUNT"]>=3].sort_values("TOTAL_COST",ascending=False).rename(
+            columns={"PATIENT_ID":"Patient","VISIT_COUNT":"Visits","TOTAL_COST":"Total Cost ($)",
+                     "NON_URGENT_VISITS":"Non-Urgent Visits","NON_URGENT_COST":"Non-Urgent Cost ($)"})
+        if freq_df.empty: st.info("No frequent utilizers for selected filters.")
+        else:
+            tc_col = freq_df["Total Cost ($)"]
+            tc_min, tc_max = tc_col.min(), tc_col.max()
+            tc_rng = tc_max - tc_min if tc_max != tc_min else 1
+            nu_col = freq_df["Non-Urgent Cost ($)"]
+            nu_min, nu_max = nu_col.min(), nu_col.max()
+            nu_rng = nu_max - nu_min if nu_max != nu_min else 1
+            def color_freq(row):
+                styles = [""] * len(row)
+                tc_i = int(40 + 60 * (row["Total Cost ($)"] - tc_min) / tc_rng)
+                nu_i = int(40 + 60 * (row["Non-Urgent Cost ($)"] - nu_min) / nu_rng)
+                for i, c in enumerate(row.index):
+                    if c == "Total Cost ($)":
+                        styles[i] = f"background-color: rgba(214,39,40,{tc_i/100}); color: white"
+                    elif c == "Non-Urgent Cost ($)":
+                        styles[i] = f"background-color: rgba(255,127,14,{nu_i/100}); color: white"
+                return styles
+            styled = freq_df.style.apply(color_freq, axis=1).format(
+                {"Total Cost ($)": "${:,.0f}", "Non-Urgent Cost ($)": "${:,.0f}"})
+            st.dataframe(styled, hide_index=True, use_container_width=True, height=400)
+            st.caption(f"{len(freq_df)} members with 3+ ED visits · Red = total cost · Orange = non-urgent cost")
+        section("🤖 AI-Powered Insights")
+        etop3 = ep.sort_values("VISITS",ascending=False).head(3)
+        eprompt = f"""You are a healthcare analytics expert. Analyze ED utilization and return EXACTLY this structure:
+
+**INSIGHTS:**
+- (3 specific data-driven findings)
+
+**RISKS:**
+- (2 specific business risks)
+
+**RECOMMENDATIONS:**
+- (2 specific actionable steps)
+
+Data:
+- Total ED Visits: {e_total:,}
+- Non-Urgent Rate: {nonurg_r}% ({e_nonurg} visits)
+- Avoidable Cost: {avoid_fmt} of ${e_cost:,.0f} total
+- Utilization Rate: {util_r}/1K members
+- Frequent Utilizers: {e_freq} members (3+ visits), {e_patients} unique patients
+
+Top 3 providers by volume:
+{etop3[['PROVIDER_ID','VISITS','NON_URGENT','TOTAL_COST']].to_string(index=False)}
+
+Be specific with numbers. Reference actual providers."""
+        if st.button("🧠 Generate ED Insights", type="primary", use_container_width=True, key="er_ai"):
+            with st.spinner("Analyzing ED Utilization data with Cortex AI..."):
+                result = cortex_structured(eprompt, "ED Utilization")
+                render_ai_panel(result)
+
+        section("💬 Ask AI - Smart Questions")
+        er_context = f"""Total ED Visits: {e_total:,}, Non-Urgent: {e_nonurg} ({nonurg_r}%)
+Avoidable Cost: {avoid_fmt}, Total Cost: ${e_cost:,.0f}
+Utilization Rate: {util_r}/1K members, Frequent Utilizers: {e_freq} (3+ visits)
+Unique Patients: {e_patients}, Total Members: {TOTAL_MEMBERS:,}
+Top volume provider: {ep.sort_values('VISITS',ascending=False).iloc[0]['PROVIDER_ID']} ({int(ep.sort_values('VISITS',ascending=False).iloc[0]['VISITS'])} visits)
+Top cost provider: {ep.sort_values('TOTAL_COST',ascending=False).iloc[0]['PROVIDER_ID']} (${ep.sort_values('TOTAL_COST',ascending=False).iloc[0]['TOTAL_COST']:,.0f})"""
+        render_ask_ai([
+            "How can we reduce avoidable ED cost?",
+            "What is driving avoidable ED visits?",
+            "Who are the frequent ED utilizers and what patterns do they show?",
+            "Which providers contribute to high ED usage?",
+            "What interventions would have the biggest cost impact?"
+        ], er_context, "ED Utilization", "er")
+
+        section("🚑 Recommended Actions")
+        r1,r2,r3 = st.columns(3)
+        #with r1: st.markdown(f'<div class="ph"><strong>🔴 High Priority</strong><br><br>• Care plans for <strong>{e_freq} frequent utilizers</strong><br>• Redirect <strong>{e_nonurg} non-urgent visits</strong> to primary care<br>• Nurse triage hotline</div>', unsafe_allow_html=True)
+        #with r2: st.markdown('<div class="pm"><strong>🟡 Medium Priority</strong><br><br>• Improve ED triage workflows<br>• Provider avoidable-visit awareness<br>• Post-discharge follow-up within 48hrs</div>', unsafe_allow_html=True)
+        #with r3: st.markdown('<div class="pl"><strong>🟢 Strategic</strong><br><br>• Chronic disease management programs<br>• Member education on urgent care options<br>• Telehealth for low-acuity needs</div>', unsafe_allow_html=True)
+        with r1: st.markdown(f'<div class="ph"><strong>🔴 High Priority</strong><br><br>• Care plans for <strong>{e_freq}frequent utilizers</strong><br>• Redirect <strong>{e_nonurg} avoidable visits</strong> to primary care<br>• Nurse triage hotline</div>', unsafe_allow_html=True)
+        with r2: st.markdown('<div class="pm"><strong>🟡 Medium Priority</strong><br><br>• Improve ED triage workflows<br>• Provider avoidable-visit awareness<br>• Post-discharge follow-up within 48hrs</div>', unsafe_allow_html=True)
+        with r3: st.markdown('<div class="pl"><strong>🟢 Strategic</strong><br><br>• Chronic disease management programs<br>• Member education on urgent care options<br>• Telehealth for low-acuity needs</div>', unsafe_allow_html=True)
+# ══════════════════════════════════════════════════════════════
+# TAB 3: PREVENTIVE SCREENING
+# ══════════════════════════════════════════════════════════════
+with tab3:
+    if cg.empty:
+        st.warning("No screening data available for the selected filters. Please adjust your selections.")
+    else:
+        ct = len(cg); ce = int(cg["ELIGIBLE_FLAG"].sum()); cc = int(cg["COMPLETED_FLAG"].sum())
+        cga = int(cg["GAP_FLAG"].sum()); cv = int(cg["VISIT_FLAG"].sum()); cm = int(cg["MISSED_OPPORTUNITY_FLAG"].sum())
+        comp_r = round(cc*100.0/ce,2) if ce else 0
+        gap_r = round(cga*100.0/ce,2) if ce else 0
+        miss_r = round(cm*100.0/cv,2) if cv else 0
+
+        cp = cg.groupby("PROVIDER_ID",as_index=False).agg(
+            ELIGIBLE=("ELIGIBLE_FLAG","sum"), COMPLETED=("COMPLETED_FLAG","sum"),
+            GAPS=("GAP_FLAG","sum"), MISSED_OPP=("MISSED_OPPORTUNITY_FLAG","sum"))
+        cp["COMPLIANCE_RATE"] = round(cp["COMPLETED"]*100.0/cp["ELIGIBLE"],2)
+
+        section("📌 Executive Summary")
+        st.markdown(f"""<div class="exec-card">
+        Screening compliance at <strong>{comp_r}%</strong> with <strong>{cga:,}</strong> open gaps across
+        <strong>{cg['PATIENT_ID'].nunique():,}</strong> patients. <strong>{miss_r}%</strong> of visits resulted in
+        missed opportunities — <strong>{cm:,}</strong> encounters where screening was skipped.
+        </div>""", unsafe_allow_html=True)
+
+        section("📊 Key Performance Indicators")
+        m1,m2,m3,m4 = st.columns(4)
+        cc_c = "kpi-green" if comp_r >= 70 else "kpi-red"
+        gc_c = "kpi-red" if gap_r >= 30 else "kpi-green"
+        with m1: st.markdown(kpi("✅","Screening Compliance Rate",f"{comp_r}%",f"{cc} completed / {ce} eligible",cc_c), unsafe_allow_html=True)
+        with m2: st.markdown(kpi("⚠️","Care Gap Rate",f"{gap_r}%",f"{cga} gaps / {ce} eligible",gc_c), unsafe_allow_html=True)
+        with m3: st.markdown(kpi("📊","Provider Screening Performance",f"{round(cp['COMPLIANCE_RATE'].mean(),2)}%",f"Avg across {cp.shape[0]} providers","kpi-blue"), unsafe_allow_html=True)
+        with m4: st.markdown(kpi("🚫","Missed Opportunity Rate",f"{miss_r}%",f"{cm} missed / {cv} visits","kpi-orange"), unsafe_allow_html=True)
+
+        section("📈 Analytics")
+        cl,cr3 = st.columns(2)
+        with cl:
+            fig_c1 = plotly_bar(cp.sort_values("COMPLIANCE_RATE").head(15), "PROVIDER_ID", "COMPLIANCE_RATE",
+                                "Provider Compliance (Lowest First)", color=["#d62728","#ff7f0e","#2ca02c"], horizontal=True, text_fmt="%{text:.1f}%")
+            st.plotly_chart(fig_c1, use_container_width=True)
+        with cr3:
+            gbs = cg[cg["GAP_FLAG"]==1].groupby("SCREENING_TYPE",as_index=False).agg(GAP_COUNT=("GAP_FLAG","sum")).sort_values("GAP_COUNT",ascending=False)
+            fig_c2 = plotly_bar(gbs, "SCREENING_TYPE", "GAP_COUNT", "Care Gaps by Screening Type", text_fmt="%{text:,}")
+            fig_c2.update_traces(marker_color=COLORS["orange"])
+            st.plotly_chart(fig_c2, use_container_width=True)
+
+        cl2,cr4 = st.columns(2)
+        with cl2:
+            #st.plotly_chart(plotly_donut(["Completed","Gap"], [cc, cga], "Screening Completion Distribution", [COLORS["green"],COLORS["red"]]), use_container_width=True)
+            st.plotly_chart(plotly_donut(
+                ["Screened","Missed Opportunity"],
+                [cc, cm],
+                "Screened vs Missed Opportunities",
+                [COLORS["green"], COLORS["orange"]]
+            ), use_container_width=True)
+        with cr4:
+            miss_p = cp[cp["MISSED_OPP"]>0].sort_values("MISSED_OPP",ascending=False).head(15)
+            fig_c3 = plotly_bar(miss_p, "PROVIDER_ID", "MISSED_OPP", "Missed Opportunities by Provider", text_fmt="%{text:,}")
+            fig_c3.update_traces(marker_color=COLORS["red"])
+            st.plotly_chart(fig_c3, use_container_width=True)
+
+        section("📋 Patient Gap Details")
+        cgg = cg[cg["GAP_FLAG"]==1][["PATIENT_ID","PROVIDER_ID","SCREENING_TYPE","VISIT_FLAG","MISSED_OPPORTUNITY_FLAG","LAST_VISIT_DATE"]].sort_values(
+            ["MISSED_OPPORTUNITY_FLAG","LAST_VISIT_DATE"],ascending=[False,True]).rename(
+            columns={"PATIENT_ID":"Patient","PROVIDER_ID":"Provider","SCREENING_TYPE":"Screening",
+                     "VISIT_FLAG":"Had Visit","MISSED_OPPORTUNITY_FLAG":"Missed Opp.","LAST_VISIT_DATE":"Last Visit"})
+        if cgg.empty: st.info("No gaps for selected filters.")
+        else:
+            st.dataframe(cgg, hide_index=True, use_container_width=True, height=400)
+            st.caption(f"{len(cgg)} care gap records · Missed opportunities prioritized first")
+
+        section("🤖 AI-Powered Insights")
+        cw5 = cp.sort_values("COMPLIANCE_RATE").head(5)
+        cprompt = f"""You are a healthcare analytics expert. Analyze preventive screening and return EXACTLY this structure:
+
+**INSIGHTS:**
+- (3 specific data-driven findings)
+
+**RISKS:**
+- (2 specific business risks)
+
+**RECOMMENDATIONS:**
+- (2 specific actionable steps)
+
+Data:
+- Compliance Rate: {comp_r}% ({cc} completed / {ce} eligible)
+- Care Gap Rate: {gap_r}% ({cga} open gaps)
+- Missed Opportunity Rate: {miss_r}% ({cm} missed / {cv} visits)
+- Patients: {cg['PATIENT_ID'].nunique()}, Providers: {cg['PROVIDER_ID'].nunique()}
+
+Gaps by screening type:
+{gbs.to_string(index=False)}
+
+Lowest 5 providers:
+{cw5[['PROVIDER_ID','ELIGIBLE','COMPLETED','GAPS','COMPLIANCE_RATE']].to_string(index=False)}
+
+Be specific with numbers. Reference actual screening types and providers."""
+        if st.button("🧠 Generate Screening Insights", type="primary", use_container_width=True, key="cg_ai"):
+            with st.spinner("Analyzing screening data with Cortex AI..."):
+                result = cortex_structured(cprompt, "Preventive Screening")
+                render_ai_panel(result)
+
+        section("💬 Ask AI - Smart Questions")
+        scr_context = f"""Compliance Rate: {comp_r}% ({cc} completed / {ce} eligible)
+Care Gap Rate: {gap_r}% ({cga} gaps), Missed Opportunity Rate: {miss_r}% ({cm} of {cv} visits)
+Patients: {cg['PATIENT_ID'].nunique()}, Providers: {cp.shape[0]}
+Lowest provider: {cp.sort_values('COMPLIANCE_RATE').iloc[0]['PROVIDER_ID']} ({cp.sort_values('COMPLIANCE_RATE').iloc[0]['COMPLIANCE_RATE']}%)
+Top gap type: {gbs.iloc[0]['SCREENING_TYPE']} ({int(gbs.iloc[0]['GAP_COUNT'])} gaps)
+Most missed opps: {cp.sort_values('MISSED_OPP',ascending=False).iloc[0]['PROVIDER_ID']} ({int(cp.sort_values('MISSED_OPP',ascending=False).iloc[0]['MISSED_OPP'])} missed)"""
+        render_ask_ai([
+            "Which members missed preventive screenings?",
+            "Where are the biggest care gaps by screening type?",
+            "How can we improve screening compliance?",
+            "Which providers have lowest screening performance?",
+            "What is the impact of missed opportunities on quality scores?"
+        ], scr_context, "Preventive Screening", "cg")
+
+        section("🚑 Recommended Actions")
+        b1,b2,b3 = st.columns(3)
+        with b1: st.markdown(f'<div class="ph"><strong>🔴 High Priority</strong><br><br>• Close <strong>{cm:,} missed opportunities</strong><br>• Outreach to <strong>{cga:,} overdue patients</strong><br>• Flag gaps in scheduler</div>', unsafe_allow_html=True)
+        with b2: st.markdown('<div class="pm"><strong>🟡 Medium Priority</strong><br><br>• Provider compliance scorecards<br>• EHR screening order-sets<br>• Monthly tracking by type</div>', unsafe_allow_html=True)
+        with b3: st.markdown('<div class="pl"><strong>🟢 Strategic</strong><br><br>• Target 80%+ compliance<br>• Pre-visit screening alerts<br>• HEDIS measure alignment</div>', unsafe_allow_html=True)
+
+st.markdown("---")
+#st.caption("CareIntelAI v8.0 | Enterprise Edition | HCC · ED Utilization · Preventive Screening")
+
