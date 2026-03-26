@@ -1,0 +1,169 @@
+Enhance the existing Streamlit healthcare analytics application "CareIntelAI".
+
+Currently the app has:
+- Tab 1: HCC Recapture (HCC_DASHBOARD_SUMMARY)
+- Tab 2: Preventive Screening (CARE_GAP_SUMMARY)
+
+-------------------------------------
+STEP 1: CREATE NEW SUMMARY VIew
+-------------------------------------
+
+Create a new table: ER_UTILIZATION_SUMMARY
+
+Use source tables:
+- CLAIMS
+- MEMBER
+- PROVIDER
+- DIAGNOSIS
+- PROCEDURE
+
+Define logic:
+
+1. Identify ED visits:
+- From CLAIMS where visit type = 'ER' or place_of_service indicates Emergency
+
+2. Classify visits:
+- NON_URGENT_FLAG = 1 if diagnosis indicates non-emergency condition
+- Use DIAGNOSIS codes (low severity conditions)
+
+3. Define columns:
+
+- PATIENT_ID
+- PROVIDER_ID
+- VISIT_ID
+- VISIT_DATE
+- ED_VISIT_FLAG (1)
+- NON_URGENT_FLAG (1 if avoidable)
+- COST (from claims)
+- MEMBER_FLAG (1 per unique member)
+- MULTIPLE_VISIT_FLAG (1 if patient has >= 3 ED visits in a year)
+
+4. Additional logic:
+
+- TOTAL_ED_VISITS per patient (window function)
+- MULTIPLE_VISIT_FLAG = 1 if TOTAL_ED_VISITS >= 3
+
+-------------------------------------
+STEP 2: KPI DEFINITIONS
+-------------------------------------
+
+Implement KPIs:
+
+1. Non-Urgent ED Visit Rate
+= Non-urgent ED visits / Total ED visits
+
+2. Avoidable ED Cost
+= Sum of cost for non-urgent ED visits
+
+3. ED Utilization Rate
+= (Total ED visits / Total members) * 1000
+
+4. Frequent ED Utilizer Rate
+= Members with >=3 ED visits / Total members
+
+-------------------------------------
+STEP 3: ADD NEW TAB IN STREAMLIT
+-------------------------------------
+
+Create Tab 3:
+"🚑 Avoidable ER Utilization"
+
+-------------------------------------
+TAB 3 COMPONENTS
+-------------------------------------
+
+1. Executive Summary:
+- % of non-urgent visits
+- Total avoidable cost
+- High-utilization members
+- Key pattern
+
+2. KPI Cards:
+- Non-Urgent ED Visit Rate
+- Avoidable ED Cost
+- ED Utilization Rate
+- Frequent ED Utilizer Rate
+
+3. Charts:
+
+- ED Visits by Provider
+- Non-Urgent vs Urgent Distribution
+- Top High-Utilization Members
+- Cost by Provider
+
+Add short insights below charts.
+
+4. Patient Table:
+
+Show:
+- PATIENT_ID
+- VISIT_COUNT
+- TOTAL_COST
+- MULTIPLE_VISIT_FLAG
+
+Filter:
+Show only high utilizers (>=3 visits)
+
+5. AI Insights (Cortex):
+
+Generate:
+- % non-urgent visits
+- Total avoidable cost
+- Top 3 providers driving ER usage
+- Recommendation to reduce ER visits
+
+6. Recommended Actions:
+
+High Priority:
+- Target high-utilization members
+- Redirect non-urgent cases to primary care
+
+Medium Priority:
+- Improve triage workflows
+- Provider awareness
+
+Strategic:
+- Preventive care programs
+- Member education
+
+-------------------------------------
+STEP 4: UI DESIGN IMPROVEMENT
+-------------------------------------
+
+Make entire app clean and executive-friendly:
+
+- Add section dividers
+- Use icons:
+  📊 KPIs
+  📈 Charts
+  📋 Tables
+  🤖 AI
+  🚑 Actions
+
+- Ensure consistent layout across all 3 tabs
+- Add headings and spacing
+- Use clear labels and captions
+
+-------------------------------------
+STEP 5: GLOBAL FILTERS
+-------------------------------------
+
+Apply across all tabs:
+- Provider ID
+- Patient ID
+- Date
+
+-------------------------------------
+OUTPUT
+-------------------------------------
+
+1. SQL to create ER_UTILIZATION_SUMMARY
+2. Updated Streamlit code with 3 tabs
+3. Cortex AI queries for insights
+
+Ensure:
+- Clean joins
+- Optimized logic
+- Production-ready code
+
+
