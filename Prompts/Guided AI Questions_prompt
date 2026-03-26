@@ -1,0 +1,162 @@
+You are a Snowflake Cortex + Streamlit expert.
+
+We have an existing Streamlit healthcare analytics app with:
+- Tabs: HCC Recapture, ER Utilization, Preventive Screening
+- KPIs already calculated
+- Data available in dataframes (filtered_df or summary tables)
+
+----------------------------------------
+🎯 OBJECTIVE
+----------------------------------------
+
+Add a "Guided AI Questions" feature in EACH TAB.
+
+Users should:
+✔ Select a predefined business question
+✔ Click a button
+✔ Get AI-generated answer using Cortex
+
+DO NOT:
+- Change existing UI layout significantly
+- Modify KPI logic
+- Break existing code
+
+----------------------------------------
+🧠 TASK 1: CREATE REUSABLE FUNCTION
+----------------------------------------
+
+Create function:
+
+def ask_ai(question, context):
+    prompt = f"""
+    You are a healthcare analytics expert.
+
+    Context:
+    {context}
+
+    Question:
+    {question}
+
+    Answer:
+    - In simple business language
+    - Give clear explanation
+    - Include actionable recommendation
+    """
+
+    query = f"""
+    SELECT SNOWFLAKE.CORTEX.COMPLETE(
+        'mistral-large',
+        $$ {prompt} $$
+    ) AS RESPONSE;
+    """
+
+    return session.sql(query).collect()[0]["RESPONSE"]
+
+----------------------------------------
+🧠 TASK 2: ADD UI SECTION
+----------------------------------------
+
+In each tab, add:
+
+st.markdown("### 🤖 Ask AI (Smart Questions)")
+
+----------------------------------------
+📊 TASK 3: HCC QUESTIONS
+----------------------------------------
+
+Add selectbox:
+
+questions = [
+    "Which providers are causing highest revenue leakage?",
+    "How can we improve HCC recapture rate?",
+    "Where are the biggest recapture gaps?",
+    "Which members are high risk due to missed HCCs?"
+]
+
+----------------------------------------
+🚑 TASK 4: ER QUESTIONS
+----------------------------------------
+
+questions = [
+    "How can we reduce ER cost?",
+    "What is driving non-urgent ER visits?",
+    "Who are frequent ER utilizers?",
+    "Which providers contribute to high ER usage?"
+]
+
+----------------------------------------
+🩺 TASK 5: SCREENING QUESTIONS
+----------------------------------------
+
+questions = [
+    "Which members missed preventive screenings?",
+    "Where are the biggest care gaps?",
+    "How can we improve screening compliance?",
+    "Which providers have low screening performance?"
+]
+
+----------------------------------------
+🛠 TASK 6: CONTEXT PREPARATION (VERY IMPORTANT)
+----------------------------------------
+
+Create a small summary context (NOT full data):
+
+Example:
+
+context = f"""
+Recapture Rate: {recapture_rate}
+Drop-Off Rate: {drop_off}
+Opportunity Rate: {opportunity}
+Revenue Leakage: {revenue}
+Top Provider: {top_provider}
+Bottom Provider: {bottom_provider}
+"""
+
+Keep it concise and relevant per tab.
+
+----------------------------------------
+🛠 TASK 7: BUTTON ACTION
+----------------------------------------
+
+selected_q = st.selectbox("Select a question", questions)
+
+if st.button("Get Answer"):
+    with st.spinner("Analyzing..."):
+        response = ask_ai(selected_q, context)
+
+    st.success(response)
+
+----------------------------------------
+🛡 TASK 8: SAFETY HANDLING
+----------------------------------------
+
+If no data:
+
+st.warning("Not enough data to answer this question")
+
+If Cortex fails:
+
+Return fallback message:
+"Based on current data, key drivers include provider performance and care gaps."
+
+----------------------------------------
+🎯 OUTPUT
+----------------------------------------
+
+Provide:
+
+1. ask_ai() function
+2. Streamlit UI snippet for all 3 tabs
+3. Example context creation
+4. Safe fallback handling
+
+----------------------------------------
+✔ SUCCESS CRITERIA
+----------------------------------------
+
+✔ Clean UI integration  
+✔ Relevant answers (not generic)  
+✔ Fast response  
+✔ No app break  
+✔ Works during demo  
+✔ Business-friendly output
